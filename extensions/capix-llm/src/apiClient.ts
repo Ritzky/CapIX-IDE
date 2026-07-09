@@ -145,4 +145,85 @@ export class CapixClient {
   async getQuote(tierId: string, hours: number): Promise<{ ok: boolean; quote?: { amountUsd: number; assetPrice: number } }> {
     return this.get(`/api/cloud/deploy/quote?tierId=${tierId}&hours=${hours}&asset=SOL`);
   }
+
+  // ── Instance Deploy (VPS — sharded multi-node) ────────────────────────
+  async deployInstance(tierId: string, region: string, durationHours: number, image?: string): Promise<{ ok: boolean; instance?: unknown; error?: string }> {
+    return this.post("/api/cloud/deploy", { tierId, region, durationHours, image });
+  }
+
+  // ── GPU Deploy (dedicated GPU from live offers) ───────────────────────
+  async getGpuOffers(): Promise<{ ok: boolean; offers?: unknown[] }> {
+    return this.get("/api/cloud/gpu-deploy?action=offers");
+  }
+
+  async getGpuInstances(): Promise<{ ok: boolean; instances?: unknown[] }> {
+    return this.get("/api/cloud/gpu-deploy?action=instances");
+  }
+
+  async deployGpu(askId: number, diskGb: number, durationHours: number): Promise<{ ok: boolean; instanceId?: number; label?: string; gpu?: string; pricePerHr?: number; chargedUsd?: number; error?: string }> {
+    return this.post("/api/cloud/gpu-deploy", { askId, diskGb, durationHours });
+  }
+
+  // ── Agent Deploy (GitHub repo → pod) ──────────────────────────────────
+  async getAgents(): Promise<{ ok: boolean; agents?: unknown[] }> {
+    return this.get("/api/cloud/agent-deploy");
+  }
+
+  async deployAgent(repoUrl: string, branch: string, envVars: Record<string, string>, useUnifiedInference: boolean, startCommand?: string): Promise<{ ok: boolean; deployment?: unknown; error?: string }> {
+    return this.post("/api/cloud/agent-deploy", { repoUrl, branch, envVars, useUnifiedInference, startCommand });
+  }
+
+  // ── Serverless Jobs ───────────────────────────────────────────────────
+  async getJobs(): Promise<{ ok: boolean; jobs?: unknown[] }> {
+    return this.get("/api/cloud/job-trigger");
+  }
+
+  async triggerJob(yaml: string): Promise<{ ok: boolean; job?: unknown; error?: string }> {
+    return this.post("/api/cloud/job-trigger", { yaml });
+  }
+
+  // ── Instances: list, detail, control ───────────────────────────────────
+  async getInstanceDetail(instanceId: string): Promise<{ ok: boolean; instance?: unknown }> {
+    return this.get(`/api/cloud/instances/${instanceId}`);
+  }
+
+  async controlInstance(instanceId: string, action: "stop" | "start" | "destroy", command?: string, timeoutMs?: number): Promise<{ ok: boolean; results?: unknown[]; error?: string }> {
+    return this.post(`/api/cloud/instances/${instanceId}`, { action, command, timeoutMs });
+  }
+
+  // ── API Keys (for the chat gateway) ───────────────────────────────────
+  async getApiKeys(): Promise<{ ok: boolean; keys?: unknown[] }> {
+    return this.get("/api/cloud/api-keys");
+  }
+
+  async createApiKey(name: string): Promise<{ ok: boolean; secret?: string; warning?: string; error?: string }> {
+    return this.post("/api/cloud/api-keys", { name, action: "create" });
+  }
+
+  async revokeApiKey(keyId: string): Promise<{ ok: boolean }> {
+    return this.post("/api/cloud/api-keys", { action: "revoke", keyId });
+  }
+
+  // ── Chat (OpenAI-compatible gateway — for auto-connect) ────────────────
+  async chat(body: { messages: Array<{ role: string; content: string }>; model?: string; max_tokens?: number }, apiKey?: string): Promise<{ ok: boolean; capix?: { route: string; tokensBilled: number; usdCost: number } }> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    else Object.assign(headers, this.authHeaders);
+    const res = await fetch(`${this.baseUrl}/api/v1/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    return res.json() as Promise<{ ok: boolean; capix?: { route: string; tokensBilled: number; usdCost: number } }>;
+  }
+
+  // ── Logs ──────────────────────────────────────────────────────────────
+  async getPodLogs(podId: string): Promise<{ ok: boolean; logs?: unknown[] }> {
+    return this.get(`/api/cloud/logs?podId=${encodeURIComponent(podId)}`);
+  }
+
+  // ── Pods cluster ───────────────────────────────────────────────────────
+  async getPodCluster(): Promise<{ ok: boolean; cluster?: unknown; nodes?: unknown[] }> {
+    return this.get("/api/cloud/pods?action=cluster");
+  }
 }

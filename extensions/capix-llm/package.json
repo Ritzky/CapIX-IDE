@@ -32,6 +32,22 @@
           "name": "My Deploys"
         },
         {
+          "id": "capix.llm.instances",
+          "name": "Instances"
+        },
+        {
+          "id": "capix.llm.agents",
+          "name": "Agents"
+        },
+        {
+          "id": "capix.llm.jobs",
+          "name": "Serverless Jobs"
+        },
+        {
+          "id": "capix.llm.apikeys",
+          "name": "API Keys"
+        },
+        {
           "id": "capix.llm.catalog",
           "name": "Model Catalog"
         },
@@ -118,6 +134,64 @@
         "command": "capix.openBilling",
         "title": "Capix: Open Billing Page",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "capix.openInstance",
+        "title": "Capix: Open Instance Detail",
+        "icon": "$(link)"
+      },
+      {
+        "command": "capix.openTerminal",
+        "title": "Capix: Open SSH Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "capix.refreshInstances",
+        "title": "Capix: Refresh Instances",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "capix.refreshAgents",
+        "title": "Capix: Refresh Agents",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "capix.refreshJobs",
+        "title": "Capix: Refresh Jobs",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "capix.refreshApiKeys",
+        "title": "Capix: Refresh API Keys",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "capix.deployAgent",
+        "title": "Capix: Deploy Agent (GitHub repo)…",
+        "icon": "$(github)"
+      },
+      {
+        "command": "capix.triggerJob",
+        "title": "Capix: Trigger Serverless Job…",
+        "icon": "$(play)"
+      },
+      {
+        "command": "capix.createApiKey",
+        "title": "Capix: Create API Key…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "capix.covenantEdit",
+        "title": "Capix: Edit Covenant (Spirit Prompt)",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "capix.covenantRemember",
+        "title": "Capix: Remember (Save to Memory)…"
+      },
+      {
+        "command": "capix.covenantClear",
+        "title": "Capix: Clear All Memory"
       }
     ],
     "menus": {

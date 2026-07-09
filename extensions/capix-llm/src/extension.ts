@@ -12,14 +12,25 @@
 import * as vscode from "vscode";
 import { CapixClient } from "./apiClient";
 import { DeploysTreeProvider, CatalogTreeProvider, HostedTreeProvider } from "./treeViews";
+import { InstancesTreeProvider, AgentsTreeProvider, JobsTreeProvider, ApiKeysTreeProvider } from "./cloudPanels";
 import { ProfileViewProvider } from "./profileView";
+import { TerminalManager } from "./terminalManager";
+import { AutoConnectManager } from "./autoConnect";
+import { CovenantManager } from "./covenant";
 import type { CatalogModel } from "./types";
 
 let client: CapixClient;
 let deploysProvider: DeploysTreeProvider;
 let catalogProvider: CatalogTreeProvider;
 let hostedProvider: HostedTreeProvider;
+let instancesProvider: InstancesTreeProvider;
+let agentsProvider: AgentsTreeProvider;
+let jobsProvider: JobsTreeProvider;
+let apiKeysProvider: ApiKeysTreeProvider;
 let profileProvider: ProfileViewProvider;
+let terminalManager: TerminalManager;
+let autoConnect: AutoConnectManager;
+let covenant: CovenantManager;
 let refreshTimer: vscode.Disposable | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -29,25 +40,40 @@ export function activate(context: vscode.ExtensionContext) {
   deploysProvider = new DeploysTreeProvider(client);
   catalogProvider = new CatalogTreeProvider(client);
   hostedProvider = new HostedTreeProvider(client);
+  instancesProvider = new InstancesTreeProvider(client);
+  agentsProvider = new AgentsTreeProvider(client);
+  jobsProvider = new JobsTreeProvider(client);
+  apiKeysProvider = new ApiKeysTreeProvider(client);
   profileProvider = new ProfileViewProvider(client, context.extensionUri);
+  terminalManager = new TerminalManager();
+  autoConnect = new AutoConnectManager(client);
+  covenant = new CovenantManager(context);
 
   const deploysView = vscode.window.createTreeView("capix.llm.deploys", { treeDataProvider: deploysProvider });
   const catalogView = vscode.window.createTreeView("capix.llm.catalog", { treeDataProvider: catalogProvider });
   const hostedView = vscode.window.createTreeView("capix.llm.hosted", { treeDataProvider: hostedProvider });
+  const instancesView = vscode.window.createTreeView("capix.llm.instances", { treeDataProvider: instancesProvider });
+  const agentsView = vscode.window.createTreeView("capix.llm.agents", { treeDataProvider: agentsProvider });
+  const jobsView = vscode.window.createTreeView("capix.llm.jobs", { treeDataProvider: jobsProvider });
+  const apiKeysView = vscode.window.createTreeView("capix.llm.apikeys", { treeDataProvider: apiKeysProvider });
 
-  context.subscriptions.push(deploysView, catalogView, hostedView);
   context.subscriptions.push(
+    deploysView, catalogView, hostedView, instancesView, agentsView, jobsView, apiKeysView,
     vscode.window.registerWebviewViewProvider("capix.llm.profile", profileProvider),
   );
 
   // ── Auto-refresh ───────────────────────────────────────────────────────
   setupAutoRefresh(context);
 
+  // ── Auto-connect: check for ready deploys on startup ────────────────────
+  autoConnect.checkExistingDeploys();
+
   // Initial load
   refreshAll();
 
   // ── Commands ──────────────────────────────────────────────────────────
   context.subscriptions.push(
+    // LLM commands
     vscode.commands.registerCommand("capix.deployModel", (model?: CatalogModel) => cmdDeployModel(model)),
     vscode.commands.registerCommand("capix.deployCustomModel", () => cmdDeployCustomModel()),
     vscode.commands.registerCommand("capix.destroyDeploy", (item?: unknown) => cmdDestroyDeploy(item)),
@@ -57,22 +83,52 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("capix.execOnInstance", (item?: unknown) => cmdExecOnInstance(item)),
     vscode.commands.registerCommand("capix.copyEndpoint", (item?: unknown) => cmdCopyEndpoint(item)),
     vscode.commands.registerCommand("capix.copyApiKey", (item?: unknown) => cmdCopyApiKey(item)),
+
+    // Refresh commands
     vscode.commands.registerCommand("capix.refreshDeploys", () => { deploysProvider.load(); }),
     vscode.commands.registerCommand("capix.refreshCatalog", () => { catalogProvider.load(); }),
+    vscode.commands.registerCommand("capix.refreshInstances", () => { instancesProvider.load(); }),
+    vscode.commands.registerCommand("capix.refreshAgents", () => { agentsProvider.load(); }),
+    vscode.commands.registerCommand("capix.refreshJobs", () => { jobsProvider.load(); }),
+    vscode.commands.registerCommand("capix.refreshApiKeys", () => { apiKeysProvider.load(); }),
+    vscode.commands.registerCommand("capix.refreshProfile", () => { profileProvider.refresh(); }),
+
+    // Navigation
     vscode.commands.registerCommand("capix.openConsole", () => {
       vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/llm`));
     }),
-    vscode.commands.registerCommand("capix.connectWallet", () => cmdConnectWallet()),
-    vscode.commands.registerCommand("capix.topUp", () => cmdTopUp()),
     vscode.commands.registerCommand("capix.openBilling", () => {
       vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
     }),
-    vscode.commands.registerCommand("capix.refreshProfile", () => { profileProvider.refresh(); }),
+    vscode.commands.registerCommand("capix.openInstance", (instanceId: string) => {
+      vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/instances/${instanceId}`));
+    }),
+    vscode.commands.registerCommand("capix.connectWallet", () => cmdConnectWallet()),
+
+    // Profile
+    vscode.commands.registerCommand("capix.topUp", () => cmdTopUp()),
+
+    // Cloud panels
+    vscode.commands.registerCommand("capix.deployAgent", () => cmdDeployAgent()),
+    vscode.commands.registerCommand("capix.triggerJob", () => cmdTriggerJob()),
+    vscode.commands.registerCommand("capix.createApiKey", () => cmdCreateApiKey()),
+
+    // Terminal
+    vscode.commands.registerCommand("capix.openTerminal", (item?: unknown) => cmdOpenTerminal(item)),
+
+    // Covenant
+    vscode.commands.registerCommand("capix.covenantEdit", () => covenant.createSpiritFile()),
+    vscode.commands.registerCommand("capix.covenantRemember", () => cmdCovenantRemember()),
+    vscode.commands.registerCommand("capix.covenantClear", () => {
+      covenant.clearMemory();
+      vscode.window.showInformationMessage("Capix: Memory cleared.");
+    }),
   );
 }
 
 export function deactivate() {
   refreshTimer?.dispose();
+  terminalManager?.disposeAll();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -80,6 +136,10 @@ function refreshAll() {
   deploysProvider.load();
   catalogProvider.load();
   hostedProvider.load();
+  instancesProvider.load();
+  agentsProvider.load();
+  jobsProvider.load();
+  apiKeysProvider.load();
   profileProvider.refresh();
 }
 
@@ -93,6 +153,9 @@ function setupAutoRefresh(context: vscode.ExtensionContext) {
     const handle = setInterval(() => {
       deploysProvider.load();
       hostedProvider.load();
+      instancesProvider.load();
+      agentsProvider.load();
+      jobsProvider.load();
       profileProvider.refresh();
     }, interval * 1000);
     refreshTimer = new vscode.Disposable(() => clearInterval(handle));
@@ -508,7 +571,146 @@ async function cmdCopyApiKey(modelId?: string | unknown) {
   }
 }
 
-// Connect wallet / set session token
+// ── Cloud panel commands ──────────────────────────────────────────────────
+
+// Deploy an agent (GitHub repo → pod)
+async function cmdDeployAgent() {
+  if (!checkConfigured()) return;
+  const repoUrl = await vscode.window.showInputBox({
+    prompt: "GitHub repository URL",
+    placeHolder: "https://github.com/owner/repo",
+    ignoreFocusOut: true,
+    validateInput: (v) => v.startsWith("https://github.com/") ? null : "Must be a GitHub URL",
+  });
+  if (!repoUrl) return;
+
+  const branch = await vscode.window.showInputBox({ prompt: "Branch", placeHolder: "main", ignoreFocusOut: true }) || "main";
+  const useInference = await vscode.window.showQuickPick(
+    [{ label: "Yes", value: true }, { label: "No", value: false }],
+    { placeHolder: "Route LLM calls via Capix Unified Inference?" },
+  );
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Deploying ${repoUrl.split("/").pop()}…` },
+    async () => {
+      const res = await client.deployAgent(repoUrl, branch, {}, useInference?.value || false);
+      if (res.ok) {
+        vscode.window.showInformationMessage("✓ Agent deployed — check the Agents panel.");
+        agentsProvider.load();
+      } else {
+        vscode.window.showErrorMessage(res.error || "Agent deploy failed.");
+      }
+    },
+  );
+}
+
+// Trigger a serverless job
+async function cmdTriggerJob() {
+  if (!checkConfigured()) return;
+  const yaml = await vscode.window.showInputBox({
+    prompt: "Paste your capix-job.yml",
+    placeHolder: "apiVersion: capix/v1\nkind: ServerlessJob",
+    ignoreFocusOut: true,
+  });
+  if (!yaml) return;
+
+  const res = await client.triggerJob(yaml);
+  if (res.ok) {
+    vscode.window.showInformationMessage("✓ Serverless job triggered — check the Jobs panel.");
+    jobsProvider.load();
+  } else {
+    vscode.window.showErrorMessage(res.error || "Job trigger failed.");
+  }
+}
+
+// Create an API key (for the chat gateway)
+async function cmdCreateApiKey() {
+  if (!checkConfigured()) return;
+  const name = await vscode.window.showInputBox({ prompt: "API key name", placeHolder: "IDE Chat", ignoreFocusOut: true });
+  if (!name) return;
+
+  const res = await client.createApiKey(name);
+  if (res.ok && res.secret) {
+    vscode.env.clipboard.writeText(res.secret);
+    vscode.window.showInformationMessage("✓ API key created and copied to clipboard.", res.warning || "");
+    apiKeysProvider.load();
+  } else {
+    vscode.window.showErrorMessage(res.error || "Failed to create API key.");
+  }
+}
+
+// Open an SSH terminal to a deployed instance/agent/job
+async function cmdOpenTerminal(item?: unknown) {
+  // Check if the item has SSH info (from instances or agents trees)
+  const sshHost = (item as { _sshHost?: string })?._sshHost;
+  const sshPort = (item as { _sshPort?: number })?._sshPort;
+  const sshCommand = (item as { _sshCommand?: string })?._sshCommand;
+  const label = (item as { label?: string })?.label || "instance";
+
+  if (sshHost && sshPort) {
+    terminalManager.openSshSession({ host: sshHost, port: sshPort, label });
+    return;
+  }
+
+  // If it's a plain command string (agents/jobs store full ssh commands)
+  if (sshCommand) {
+    // Parse "ssh -p PORT root@HOST"
+    const match = sshCommand.match(/ssh\s+(?:-p\s+(\d+)\s+)?(\w+)@([\w.-]+)/);
+    if (match) {
+      terminalManager.openSshSession({ host: match[3], port: Number(match[1]) || 22, user: match[2], label });
+      return;
+    }
+  }
+
+  // No item — prompt the user to pick from instances
+  if (!checkConfigured()) return;
+  await instancesProvider.load();
+  if (instancesProvider.instances.length === 0) {
+    vscode.window.showInformationMessage("No instances available to SSH into.");
+    return;
+  }
+  const pick = await vscode.window.showQuickPick(
+    instancesProvider.instances.map((inst) => {
+      const node = inst.nodes.find((n) => n.sshHost);
+      return {
+        label: inst.tier,
+        description: `${inst.status} · ${node?.location || ""}`,
+        host: node?.sshHost,
+        port: node?.sshPort,
+      };
+    }).filter((p) => p.host),
+    { placeHolder: "Select an instance to SSH into" },
+  );
+  if (pick?.host && pick.port) {
+    terminalManager.openSshSession({ host: pick.host, port: pick.port, label: pick.label });
+  }
+}
+
+// Covenant: add a memory entry
+async function cmdCovenantRemember() {
+  const content = await vscode.window.showInputBox({
+    prompt: "What should I remember?",
+    placeHolder: "e.g. We use Drizzle ORM, not Prisma, for this project.",
+    ignoreFocusOut: true,
+  });
+  if (!content) return;
+
+  const typePick = await vscode.window.showQuickPick(
+    [
+      { label: "Decision", value: "decision" as const },
+      { label: "Pattern", value: "pattern" as const },
+      { label: "Feedback", value: "feedback" as const },
+      { label: "Context", value: "context" as const },
+    ],
+    { placeHolder: "Memory type" },
+  );
+  if (!typePick) return;
+
+  await covenant.remember({ type: typePick.value, content, source: "user" });
+  vscode.window.showInformationMessage("✓ Remembered. This will be included in future chat context.");
+}
+
+// Connect wallet / set session token — shared across web and IDE
 async function cmdConnectWallet() {
   const token = await vscode.window.showInputBox({
     prompt: "Paste your Capix session token (cpx_session.…)",
@@ -520,11 +722,13 @@ async function cmdConnectWallet() {
   if (!token) return;
 
   await vscode.workspace.getConfiguration("capix").update("sessionToken", token, vscode.ConfigurationTarget.Global);
-  vscode.window.showInformationMessage("✓ Capix session token saved. Loading your deploys…");
+  vscode.window.showInformationMessage("✓ Capix session token saved. Your profile, deploys, and instances are now synced.");
   refreshAll();
+  // Check for ready deploys to auto-connect
+  autoConnect.checkExistingDeploys();
 }
 
-// Top up wallet balance — shows three deposit options (SOL, USDC, USDC on Base)
+// Top up wallet balance — shared across web and IDE
 async function cmdTopUp() {
   if (!checkConfigured()) return;
 
@@ -532,71 +736,42 @@ async function cmdTopUp() {
     [
       { label: "SOL (Solana)", description: "Deposit with your Solana wallet", value: "sol" },
       { label: "USDC (Solana)", description: "Stablecoin on Solana", value: "usdc" },
-      { label: "USDC on Base", description: "SuperGemma's chain — send from any EVM wallet", value: "usdc_base" },
+      { label: "USDC on Base", description: "Send from any EVM wallet", value: "usdc_base" },
     ],
     { placeHolder: "Select a deposit method" },
   );
   if (!pick) return;
 
   if (pick.value === "usdc_base") {
-    // USDC on Base — show treasury address + let user submit tx hash
     const treasuryRes = await client.getBaseTreasury().catch(() => ({ ok: false }) as { ok: boolean });
     if (!treasuryRes.ok || !(treasuryRes as { treasury?: string }).treasury) {
-      vscode.window.showErrorMessage("Base deposits not configured yet. Use SOL or USDC instead, or top up at the web billing page.");
+      vscode.window.showErrorMessage("Base deposits not configured. Use SOL or USDC, or top up at the web billing page.");
       return;
     }
     const treasury = (treasuryRes as { treasury: string }).treasury;
-
-    const amount = await vscode.window.showInputBox({
-      prompt: "Amount in USD",
-      placeHolder: "10",
-      ignoreFocusOut: true,
-      validateInput: (v) => Number(v) > 0 ? null : "Enter a positive number",
-    });
+    const amount = await vscode.window.showInputBox({ prompt: "Amount in USD", placeHolder: "10", ignoreFocusOut: true, validateInput: (v) => Number(v) > 0 ? null : "Enter a positive number" });
     if (!amount) return;
 
-    // Show the treasury address + instructions
-    const copied = await vscode.window.showInformationMessage(
-      `Send ${amount} USDC on Base to:\n${treasury}\n\nThen submit the transaction hash.`,
-      "Copy address",
-      "Open Billing Page",
-    );
-    if (copied === "Copy address") {
-      vscode.env.clipboard.writeText(treasury);
-      vscode.window.showInformationMessage("Treasury address copied. Send your USDC, then come back to submit the tx hash.");
-    }
+    const copied = await vscode.window.showInformationMessage(`Send ${amount} USDC on Base to:\n${treasury}\n\nThen submit the tx hash.`, "Copy address", "Open Billing Page");
+    if (copied === "Copy address") { vscode.env.clipboard.writeText(treasury); }
 
-    // Get the tx hash from the user
-    const txHash = await vscode.window.showInputBox({
-      prompt: "Paste your Base transaction hash (0x...)",
-      placeHolder: "0x...",
-      ignoreFocusOut: true,
-      validateInput: (v) => v.startsWith("0x") && v.length > 20 ? null : "Must be a 0x transaction hash",
-    });
+    const evmAddress = await vscode.window.showInputBox({ prompt: "Your EVM sender address (0x...)", placeHolder: "0x...", ignoreFocusOut: true, validateInput: (v) => /^0x[a-fA-F0-9]{40}$/.test(v) ? null : "Must be 0x + 40 hex chars" });
+    if (!evmAddress) return;
+    const txHash = await vscode.window.showInputBox({ prompt: "Paste your Base tx hash (0x...)", placeHolder: "0x...", ignoreFocusOut: true, validateInput: (v) => v.startsWith("0x") && v.length > 20 ? null : "Must be a 0x hash" });
     if (!txHash) return;
 
-    // Submit for verification
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: "Verifying Base transaction…" },
-      async () => {
-        const res = await client.submitBaseDeposit(txHash, Number(amount));
-        if (res.ok) {
-          vscode.window.showInformationMessage(`✓ Deposited $${Number(amount).toFixed(2)} — new balance $${(res.balanceUsd || 0).toFixed(2)}.`);
-          profileProvider.refresh();
-        } else {
-          vscode.window.showErrorMessage(res.error || "Verification failed. Check the tx hash and try again.");
-        }
-      },
-    );
-  } else {
-    // SOL / USDC — needs the Solana wallet adapter (browser-based)
-    vscode.window.showInformationMessage(
-      `To deposit ${pick.label}, open the Capix billing page and confirm in your Solana wallet.`,
-      "Open Billing Page",
-    ).then((action) => {
-      if (action === "Open Billing Page") {
-        vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Verifying Base transaction…" }, async () => {
+      const res = await client.submitBaseDeposit(txHash, Number(amount));
+      if (res.ok) {
+        vscode.window.showInformationMessage(`✓ Deposited $${Number(amount).toFixed(2)} — balance $${(res.balanceUsd || 0).toFixed(2)}.`);
+        profileProvider.refresh();
+      } else {
+        vscode.window.showErrorMessage(res.error || "Verification failed.");
       }
+    });
+  } else {
+    vscode.window.showInformationMessage(`Open the billing page to deposit ${pick.label}.`, "Open Billing Page").then((action) => {
+      if (action === "Open Billing Page") vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
     });
   }
 }
