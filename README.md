@@ -4,7 +4,7 @@ The AI IDE for the Capix protocol — a fork of the [Void editor](https://github
 
 ## Download
 
-Pre-built binaries for Mac, Windows, and Linux are on the [Releases page](https://github.com/Ritzky/CapixIDE/releases):
+Pre-built binaries for Mac, Windows, and Linux are on the [Releases page](https://github.com/Ritzky/CapIX-IDE/releases):
 
 | Platform | Download |
 |---|---|
@@ -79,7 +79,7 @@ Capix IDE is a full VS Code-compatible editor with a Capix-branded sidebar exten
 
 ## Quick start (users)
 
-1. Download the installer for your platform from [Releases](https://github.com/Ritzky/CapixIDE/releases).
+1. Download the installer for your platform from [Releases](https://github.com/Ritzky/CapIX-IDE/releases).
 2. On first launch, Capix IDE asks: "Import from VS Code / JetBrains?" — pick one to pull in your themes, keybindings, and extensions.
 3. Run **Capix: Connect Wallet** (Command Palette) and paste your `cpx_session.…` token from capix.network.
 4. Your profile, deploys, and instances sync automatically.
@@ -91,7 +91,7 @@ See [`docs/getting-started.md`](docs/getting-started.md) for the full walkthroug
 ## For developers — building from source
 
 ```bash
-git clone https://github.com/Ritzky/CapixIDE.git
+git clone https://github.com/Ritzky/CapIX-IDE.git
 cd CapixIDE
 ./scripts/bootstrap.sh   # clones Void (VS Code fork) + applies the rebrand + installs the extension
 ./scripts/dev.sh         # launches the dev Electron build
