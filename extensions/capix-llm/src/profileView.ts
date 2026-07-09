@@ -107,9 +107,14 @@ export class ProfileViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtml(): string {
+    // M2 fix: generate a CSP nonce per render to prevent script injection.
+    const crypto = require("crypto");
+    const nonce = crypto.randomBytes(16).toString("base64");
+    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">`;
     return `<!DOCTYPE html>
 <html>
 <head>
+${cspMeta}
 <style>
   body {
     font-family: var(--vscode-font-family, system-ui, sans-serif);
@@ -259,9 +264,15 @@ export class ProfileViewProvider implements vscode.WebviewViewProvider {
   <div id="content">
     <div class="loading-msg empty">Loading your profile…</div>
   </div>
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let isConfigured = false;
+
+    // M3 fix: escape all user-controlled values before rendering into innerHTML.
+    function esc(s) {
+      if (s === null || s === undefined) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
 
     function render(data) {
       const content = document.getElementById('content');
@@ -294,11 +305,11 @@ export class ProfileViewProvider implements vscode.WebviewViewProvider {
           return \`
             <div class="deploy-row">
               <div>
-                <span class="deploy-name">\${inst.tier}</span>
-                <span class="deploy-status \${statusClass}">\${inst.status}</span>
+                <span class="deploy-name">\${esc(inst.tier)}</span>
+                <span class="deploy-status \${esc(statusClass)}">\${esc(inst.status)}</span>
               </div>
               <div style="text-align: right">
-                <div class="deploy-rate">$\\\{(inst.costUsdPerHour || 0).toFixed(2)}/hr</div>
+                <div class="deploy-rate">$\${(inst.costUsdPerHour || 0).toFixed(2)}/hr</div>
                 <div class="billing-rate">$\\\{(inst.costUsdPerHour / 60).toFixed(4)}/min</div>
               </div>
             </div>
