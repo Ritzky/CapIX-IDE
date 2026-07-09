@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+
+    steps:
+      - name: Checkout CapixIDE repo (rebrand kit)
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20.18.2
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.18.2"
+
+      - name: Clone + rebrand Void source
+        run: ./scripts/bootstrap.sh
+        shell: bash
+
+      - name: Install native deps (linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3
+
+      - name: Install npm deps
+        run: npm install
+        working-directory: vscode
+
+      - name: Build CapixIDE
+        run: ./scripts/build.sh
+        env:
+          VSCODE_ARCH: ${{ matrix.arch }}
+        shell: bash
+
+      - name: Package installer (electron-builder)
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --config ../electron-builder.yml
+        working-directory: vscode
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CapixIDE-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/CapixIDE-*
