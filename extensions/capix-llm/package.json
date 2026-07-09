@@ -15,8 +15,8 @@
       "activitybar": [
         {
           "id": "capix-llm",
-          "title": "Capix LLM",
-          "icon": "resources/capix-sidebar.svg"
+          "title": "Capix",
+          "icon": "resources/capix-activitybar.svg"
         }
       ]
     },

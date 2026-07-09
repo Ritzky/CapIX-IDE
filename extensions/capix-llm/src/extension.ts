@@ -73,6 +73,17 @@ export function activate(context: vscode.ExtensionContext) {
   // ── Auto-connect: check for ready deploys on startup ────────────────────
   autoConnect.checkExistingDeploys();
 
+  // ── Branded status bar item ────────────────────────────────────────────
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+  statusBarItem.text = "$(symbol-color) Capix";
+  statusBarItem.tooltip = "Capix — Route compute, inference, and agents";
+  statusBarItem.command = "capix.refreshProfile";
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
+  // Update status bar text when connection state changes
+  updateStatusBar(statusBarItem);
+
   // Initial load
   refreshAll();
 
@@ -148,6 +159,27 @@ export function deactivate() {
   terminalManager?.disposeAll();
 }
 
+// Update the Capix branded status bar item with connection state.
+async function updateStatusBar(item: vscode.StatusBarItem): Promise<void> {
+  try {
+    const configured = await client.checkConfigured();
+    if (configured) {
+      item.text = "$(check) Capix";
+      item.tooltip = "Capix — Connected. Click to refresh profile.";
+      item.command = "capix.refreshProfile";
+    } else {
+      item.text = "$(circle-slash) Capix";
+      item.tooltip = "Capix — Not connected. Click to connect your wallet.";
+      item.command = "capix.connectWallet";
+    }
+    item.show();
+  } catch {
+    item.hide();
+  }
+}
+
+let statusBarItem: vscode.StatusBarItem | null = null;
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 function refreshAll() {
   deploysProvider.load();
@@ -158,6 +190,7 @@ function refreshAll() {
   jobsProvider.load();
   apiKeysProvider.load();
   profileProvider.refresh();
+  if (statusBarItem) updateStatusBar(statusBarItem);
 }
 
 function setupAutoRefresh(context: vscode.ExtensionContext) {
