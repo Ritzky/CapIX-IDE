@@ -14,8 +14,53 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create.outputs.upload_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create release
+        id: create
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Capix IDE ${{ github.ref_name }}
+          body: |
+            ## Capix IDE ${{ github.ref_name }}
+
+            The AI IDE for the Capix protocol — a VS Code fork with built-in LLM deploys, cloud panels, SSH terminal, Covenant memory, and seamless profile sync.
+
+            ### Install
+
+            Download the appropriate file for your platform below.
+
+            | Platform | File |
+            |---|---|
+            | macOS (Apple Silicon) | `.dmg` (arm64) |
+            | macOS (Intel) | `.dmg` (x64) |
+            | Windows | `.exe` (x64) |
+            | Linux | `.AppImage` / `.deb` / `.rpm` |
+
+            ### Building from source
+
+            ```bash
+            git clone https://github.com/Ritzky/CapIX-IDE.git
+            cd CapixIDE
+            ./scripts/bootstrap.sh
+            ./scripts/dev.sh
+            ```
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -70,12 +115,13 @@ jobs:
         shell: bash
 
       - name: Package installer (electron-builder)
-        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --config ../electron-builder.yml
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --config ../electron-builder.yml --publish always
         working-directory: vscode
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CapixIDE-${{ matrix.platform }}-${{ matrix.arch }}
