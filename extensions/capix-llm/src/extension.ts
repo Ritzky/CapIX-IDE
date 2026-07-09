@@ -35,6 +35,11 @@ let refreshTimer: vscode.Disposable | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
   client = new CapixClient();
+  // Security: use VS Code SecretStorage for the session token instead of plaintext settings.json
+  client.setSecretStorage({
+    get: (key) => Promise.resolve(context.secrets.get(key)),
+    store: (key, value) => Promise.resolve(context.secrets.store(key, value)),
+  });
 
   // ── Tree views ────────────────────────────────────────────────────────
   deploysProvider = new DeploysTreeProvider(client);
@@ -122,6 +127,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("capix.covenantClear", () => {
       covenant.clearMemory();
       vscode.window.showInformationMessage("Capix: Memory cleared.");
+    }),
+
+    // Internal: store a secret in VS Code SecretStorage (used by auto-connect)
+    vscode.commands.registerCommand("capix._storeSecret", async (key: string, value: string) => {
+      await context.secrets.store(key, value);
     }),
   );
 }
@@ -721,8 +731,9 @@ async function cmdConnectWallet() {
   });
   if (!token) return;
 
-  await vscode.workspace.getConfiguration("capix").update("sessionToken", token, vscode.ConfigurationTarget.Global);
-  vscode.window.showInformationMessage("✓ Capix session token saved. Your profile, deploys, and instances are now synced.");
+  // Security: store token in SecretStorage (OS keychain), NOT plaintext settings
+  await client.saveSessionToken(token);
+  vscode.window.showInformationMessage("✓ Capix session token saved securely. Your profile, deploys, and instances are now synced.");
   refreshAll();
   // Check for ready deploys to auto-connect
   autoConnect.checkExistingDeploys();

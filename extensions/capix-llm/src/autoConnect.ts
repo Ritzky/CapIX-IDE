@@ -80,12 +80,14 @@ export class AutoConnectManager {
         return;
       }
 
-      // Write the base URL + API key into VS Code Settings.
-      // The Capix chat panel reads these as the default openAICompatible provider.
+      // Write the base URL + API key into VS Code SecretStorage (not plaintext settings).
+      // The base URL is non-sensitive and goes in settings; the API key goes to secrets.
       const config = vscode.workspace.getConfiguration("capix");
       await config.update("ai.baseUrl", baseUrl, vscode.ConfigurationTarget.Global);
-      await config.update("ai.apiKey", keyRes.apiKey, vscode.ConfigurationTarget.Global);
       await config.update("ai.model", modelLabel, vscode.ConfigurationTarget.Global);
+      // API key: store in SecretStorage via the extension context.
+      // The chat panel reads it via the same secret key.
+      await vscode.commands.executeCommand("capix._storeSecret", "capix.ai.apiKey", keyRes.apiKey);
 
       vscode.window.showInformationMessage(
         `✓ ${modelLabel} is ready! Chat panel auto-configured with your endpoint.`,

@@ -7,6 +7,15 @@ import * as vscode from "vscode";
 import type { CatalogModel, GpuOffer, LlmDeploy, HostedEndpoint, DeployResult } from "./types";
 
 export class CapixClient {
+  /** Cached session token (loaded from SecretStorage on first use) */
+  private _sessionToken: string | null = null;
+  private _secretStorage?: { get: (key: string) => Promise<string | undefined>; store: (key: string, value: string) => Promise<void> };
+
+  /** Wire up VS Code SecretStorage for secure (non-plaintext) token storage */
+  setSecretStorage(store: { get: (key: string) => Promise<string | undefined>; store: (key: string, value: string) => Promise<void> }): void {
+    this._secretStorage = store;
+  }
+
   get baseUrl(): string {
     return vscode.workspace.getConfiguration("capix").get<string>("baseUrl") || "https://capix.network";
   }
@@ -15,22 +24,45 @@ export class CapixClient {
     return this.baseUrl;
   }
 
-  private get sessionToken(): string {
+  /** Lazily fetch the session token from SecretStorage (avoids plaintext in settings.json) */
+  async getStoredToken(): Promise<string> {
+    if (this._sessionToken) return this._sessionToken;
+    if (this._secretStorage) {
+      const stored = await this._secretStorage.get("capix.sessionToken");
+      if (stored) { this._sessionToken = stored; return stored; }
+    }
+    // Fallback: read from settings (backward compat with older versions)
     return vscode.workspace.getConfiguration("capix").get<string>("sessionToken") || "";
   }
 
-  private get authHeaders(): Record<string, string> {
-    const token = this.sessionToken;
+  /** Save the session token to SecretStorage + clear plaintext settings */
+  async saveSessionToken(token: string): Promise<void> {
+    this._sessionToken = token;
+    if (this._secretStorage) {
+      await this._secretStorage.store("capix.sessionToken", token);
+    }
+    await vscode.workspace.getConfiguration("capix").update("sessionToken", undefined, vscode.ConfigurationTarget.Global);
+  }
+
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    const token = await this.getStoredToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
   get isConfigured(): boolean {
-    return this.sessionToken.startsWith("cpx_session.");
+    return Boolean(this._sessionToken && this._sessionToken.startsWith("cpx_session."));
+  }
+
+  /** Async config check (used by tools that can await) */
+  async checkConfigured(): Promise<boolean> {
+    const token = await this.getStoredToken();
+    this._sessionToken = token;
+    return token.startsWith("cpx_session.");
   }
 
   async get<T = unknown>(path: string): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
-      headers: { ...this.authHeaders },
+      headers: { ...(await this.getAuthHeaders()) },
     });
     return res.json() as Promise<T>;
   }
@@ -38,7 +70,7 @@ export class CapixClient {
   async post<T = unknown>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...this.authHeaders },
+      headers: { "Content-Type": "application/json", ...(await this.getAuthHeaders()) },
       body: JSON.stringify(body),
     });
     return res.json() as Promise<T>;
@@ -47,7 +79,7 @@ export class CapixClient {
   async delete<T = unknown>(path: string): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: "DELETE",
-      headers: { ...this.authHeaders },
+      headers: { ...(await this.getAuthHeaders()) },
     });
     return res.json() as Promise<T>;
   }
@@ -208,7 +240,7 @@ export class CapixClient {
   async chat(body: { messages: Array<{ role: string; content: string }>; model?: string; max_tokens?: number }, apiKey?: string): Promise<{ ok: boolean; capix?: { route: string; tokensBilled: number; usdCost: number } }> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    else Object.assign(headers, this.authHeaders);
+    else Object.assign(headers, await this.getAuthHeaders());
     const res = await fetch(`${this.baseUrl}/api/v1/chat/completions`, {
       method: "POST",
       headers,

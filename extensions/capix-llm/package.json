@@ -267,7 +267,8 @@
         "capix.sessionToken": {
           "type": "string",
           "default": "",
-          "description": "Your Capix session token (cpx_session.…). Get it from capix.network → sign in → browser DevTools → Application → Cookies → capix_session."
+          "description": "DEPRECATED — session tokens are now stored in VS Code SecretStorage (OS keychain). Use 'Capix: Connect Wallet' command to set your token.",
+          "deprecationMessage": "Use the 'Capix: Connect Wallet' command instead."
         },
         "capix.autoRefreshSeconds": {
           "type": "number",
