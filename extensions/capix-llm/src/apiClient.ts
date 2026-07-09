@@ -124,7 +124,25 @@ export class CapixClient {
   }
 
   // ── Wallet balance ────────────────────────────────────────────────────
-  async getBalance(): Promise<{ ok: boolean; balance?: { usd: number } }> {
+  async getBalance(): Promise<{ ok: boolean; balance?: { usd: number; sol: number; usdc: number }; activeInstances?: number; totalSpent?: number; error?: string }> {
     return this.get("/api/cloud/billing");
+  }
+
+  // ── Billing: base treasury address for USDC on Base ───────────────────
+  async getBaseTreasury(): Promise<{ ok: boolean; treasury?: string; chain?: string; contract?: string; explorer?: string }> {
+    return this.get("/api/cloud/billing?action=base-treasury");
+  }
+
+  // ── Deposit (SOL or USDC on Solana — returns a tx signature) ──────────
+  // The actual signing happens in the web browser with the Solana wallet
+  // adapter. The IDE just opens the billing page for the user to complete.
+  // For USDC on Base (EVM), the user sends manually and submits the tx hash.
+  async submitBaseDeposit(txHash: string, amountUsd: number): Promise<{ ok: boolean; balanceUsd?: number; error?: string }> {
+    return this.post("/api/cloud/billing", { action: "deposit", signature: txHash, asset: "USDC_BASE", amountUsd });
+  }
+
+  // ── Deploy quote (for showing per-minute costs) ────────────────────────
+  async getQuote(tierId: string, hours: number): Promise<{ ok: boolean; quote?: { amountUsd: number; assetPrice: number } }> {
+    return this.get(`/api/cloud/deploy/quote?tierId=${tierId}&hours=${hours}&asset=SOL`);
   }
 }

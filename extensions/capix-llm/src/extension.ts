@@ -12,12 +12,14 @@
 import * as vscode from "vscode";
 import { CapixClient } from "./apiClient";
 import { DeploysTreeProvider, CatalogTreeProvider, HostedTreeProvider } from "./treeViews";
+import { ProfileViewProvider } from "./profileView";
 import type { CatalogModel } from "./types";
 
 let client: CapixClient;
 let deploysProvider: DeploysTreeProvider;
 let catalogProvider: CatalogTreeProvider;
 let hostedProvider: HostedTreeProvider;
+let profileProvider: ProfileViewProvider;
 let refreshTimer: vscode.Disposable | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -27,12 +29,16 @@ export function activate(context: vscode.ExtensionContext) {
   deploysProvider = new DeploysTreeProvider(client);
   catalogProvider = new CatalogTreeProvider(client);
   hostedProvider = new HostedTreeProvider(client);
+  profileProvider = new ProfileViewProvider(client, context.extensionUri);
 
   const deploysView = vscode.window.createTreeView("capix.llm.deploys", { treeDataProvider: deploysProvider });
   const catalogView = vscode.window.createTreeView("capix.llm.catalog", { treeDataProvider: catalogProvider });
   const hostedView = vscode.window.createTreeView("capix.llm.hosted", { treeDataProvider: hostedProvider });
 
   context.subscriptions.push(deploysView, catalogView, hostedView);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("capix.llm.profile", profileProvider),
+  );
 
   // ── Auto-refresh ───────────────────────────────────────────────────────
   setupAutoRefresh(context);
@@ -57,6 +63,11 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/llm`));
     }),
     vscode.commands.registerCommand("capix.connectWallet", () => cmdConnectWallet()),
+    vscode.commands.registerCommand("capix.topUp", () => cmdTopUp()),
+    vscode.commands.registerCommand("capix.openBilling", () => {
+      vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
+    }),
+    vscode.commands.registerCommand("capix.refreshProfile", () => { profileProvider.refresh(); }),
   );
 }
 
@@ -69,6 +80,7 @@ function refreshAll() {
   deploysProvider.load();
   catalogProvider.load();
   hostedProvider.load();
+  profileProvider.refresh();
 }
 
 function setupAutoRefresh(context: vscode.ExtensionContext) {
@@ -81,6 +93,7 @@ function setupAutoRefresh(context: vscode.ExtensionContext) {
     const handle = setInterval(() => {
       deploysProvider.load();
       hostedProvider.load();
+      profileProvider.refresh();
     }, interval * 1000);
     refreshTimer = new vscode.Disposable(() => clearInterval(handle));
   };
@@ -509,4 +522,81 @@ async function cmdConnectWallet() {
   await vscode.workspace.getConfiguration("capix").update("sessionToken", token, vscode.ConfigurationTarget.Global);
   vscode.window.showInformationMessage("✓ Capix session token saved. Loading your deploys…");
   refreshAll();
+}
+
+// Top up wallet balance — shows three deposit options (SOL, USDC, USDC on Base)
+async function cmdTopUp() {
+  if (!checkConfigured()) return;
+
+  const pick = await vscode.window.showQuickPick(
+    [
+      { label: "SOL (Solana)", description: "Deposit with your Solana wallet", value: "sol" },
+      { label: "USDC (Solana)", description: "Stablecoin on Solana", value: "usdc" },
+      { label: "USDC on Base", description: "SuperGemma's chain — send from any EVM wallet", value: "usdc_base" },
+    ],
+    { placeHolder: "Select a deposit method" },
+  );
+  if (!pick) return;
+
+  if (pick.value === "usdc_base") {
+    // USDC on Base — show treasury address + let user submit tx hash
+    const treasuryRes = await client.getBaseTreasury().catch(() => ({ ok: false }) as { ok: boolean });
+    if (!treasuryRes.ok || !(treasuryRes as { treasury?: string }).treasury) {
+      vscode.window.showErrorMessage("Base deposits not configured yet. Use SOL or USDC instead, or top up at the web billing page.");
+      return;
+    }
+    const treasury = (treasuryRes as { treasury: string }).treasury;
+
+    const amount = await vscode.window.showInputBox({
+      prompt: "Amount in USD",
+      placeHolder: "10",
+      ignoreFocusOut: true,
+      validateInput: (v) => Number(v) > 0 ? null : "Enter a positive number",
+    });
+    if (!amount) return;
+
+    // Show the treasury address + instructions
+    const copied = await vscode.window.showInformationMessage(
+      `Send ${amount} USDC on Base to:\n${treasury}\n\nThen submit the transaction hash.`,
+      "Copy address",
+      "Open Billing Page",
+    );
+    if (copied === "Copy address") {
+      vscode.env.clipboard.writeText(treasury);
+      vscode.window.showInformationMessage("Treasury address copied. Send your USDC, then come back to submit the tx hash.");
+    }
+
+    // Get the tx hash from the user
+    const txHash = await vscode.window.showInputBox({
+      prompt: "Paste your Base transaction hash (0x...)",
+      placeHolder: "0x...",
+      ignoreFocusOut: true,
+      validateInput: (v) => v.startsWith("0x") && v.length > 20 ? null : "Must be a 0x transaction hash",
+    });
+    if (!txHash) return;
+
+    // Submit for verification
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "Verifying Base transaction…" },
+      async () => {
+        const res = await client.submitBaseDeposit(txHash, Number(amount));
+        if (res.ok) {
+          vscode.window.showInformationMessage(`✓ Deposited $${Number(amount).toFixed(2)} — new balance $${(res.balanceUsd || 0).toFixed(2)}.`);
+          profileProvider.refresh();
+        } else {
+          vscode.window.showErrorMessage(res.error || "Verification failed. Check the tx hash and try again.");
+        }
+      },
+    );
+  } else {
+    // SOL / USDC — needs the Solana wallet adapter (browser-based)
+    vscode.window.showInformationMessage(
+      `To deposit ${pick.label}, open the Capix billing page and confirm in your Solana wallet.`,
+      "Open Billing Page",
+    ).then((action) => {
+      if (action === "Open Billing Page") {
+        vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
+      }
+    });
+  }
 }

@@ -23,6 +23,11 @@
     "views": {
       "capix-llm": [
         {
+          "id": "capix.llm.profile",
+          "name": "Profile",
+          "type": "webview"
+        },
+        {
           "id": "capix.llm.deploys",
           "name": "My Deploys"
         },
@@ -98,6 +103,21 @@
         "command": "capix.execOnInstance",
         "title": "Capix: Run Command on GPU Instance…",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "capix.topUp",
+        "title": "Capix: Top Up Wallet Balance…",
+        "icon": "$(credit-card)"
+      },
+      {
+        "command": "capix.refreshProfile",
+        "title": "Capix: Refresh Profile",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "capix.openBilling",
+        "title": "Capix: Open Billing Page",
+        "icon": "$(link-external)"
       }
     ],
     "menus": {
