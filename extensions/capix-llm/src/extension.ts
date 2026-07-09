@@ -133,6 +133,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("capix._storeSecret", async (key: string, value: string) => {
       await context.secrets.store(key, value);
     }),
+    // Internal: read a secret from VS Code SecretStorage (used by launch-capix-code)
+    vscode.commands.registerCommand("capix._getSecret", async (key: string): Promise<string | undefined> => {
+      return context.secrets.get(key);
+    }),
+
+    // Launch Capix Code (the CLI coding assistant) in a terminal
+    vscode.commands.registerCommand("capix.launchCapixCode", () => cmdLaunchCapixCode()),
   );
 }
 
@@ -785,4 +792,38 @@ async function cmdTopUp() {
       if (action === "Open Billing Page") vscode.env.openExternal(vscode.Uri.parse(`${client.getBaseUrl()}/cloud/billing`));
     });
   }
+}
+
+// Launch capix-code (the CLI coding assistant) in a terminal, pre-configured
+// with the user's Capix endpoint + API key from SecretStorage.
+async function cmdLaunchCapixCode() {
+  // Read the auto-configured endpoint (set by auto-connect when a deploy goes live)
+  const config = vscode.workspace.getConfiguration("capix");
+  const baseUrl = config.get<string>("ai.baseUrl") || `${client.getBaseUrl()}/api/v1`;
+  const model = config.get<string>("ai.model") || "auto";
+
+  // Get the API key from SecretStorage
+  let apiKey = await vscode.commands.executeCommand<string>("capix._getSecret", "capix.ai.apiKey") || "";
+
+  // If no key from a deployed LLM, try the session token for the gateway
+  if (!apiKey) {
+    const token = await client.getStoredToken();
+    if (token.startsWith("cpx_session.")) {
+      apiKey = token;
+      // Use the gateway URL if no deployed endpoint
+      vscode.window.showInformationMessage(
+        "Capix Code: using the Capix gateway (auto-routing to cheapest model). Deploy your own LLM for a private endpoint.",
+      );
+    } else {
+      vscode.window.showWarningMessage(
+        "Capix Code: no API key configured. Set one with 'Capix: Connect Wallet' or deploy an LLM first.",
+        "Connect Wallet",
+      ).then((action) => {
+        if (action === "Connect Wallet") vscode.commands.executeCommand("capix.connectWallet");
+      });
+      return;
+    }
+  }
+
+  await terminalManager.openCapixCode(baseUrl, apiKey, model);
 }

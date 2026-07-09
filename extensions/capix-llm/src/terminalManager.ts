@@ -1,14 +1,18 @@
 /**
  * Terminal Manager — opens native VS Code terminals connected to deployed
- * instances via SSH.
+ * instances via SSH, and launches capix-code (the Capix CLI coding assistant)
+ * pre-configured with the user's Capix endpoint + API key.
  *
- * When a user clicks "Open Terminal" on any instance/agent/job in the tree,
- * we open a real VS Code integrated terminal running `ssh -p {port} root@{host}`
- * — the same command they'd type manually, but pre-configured with the
- * instance's SSH details.
+ * Capix Code integration:
+ *   When a user deploys an LLM (in the IDE or on the web), the auto-connect
+ *   manager writes the base URL + API key to SecretStorage. This terminal
+ *   manager reads those values and sets CAPIX_BASE_URL + CAPIX_API_KEY env
+ *   vars before launching `capix-code` — so the CLI assistant is
+ *   auto-configured with zero manual setup.
  *
- * The terminal is persistent in the VS Code session — the user can open
- * multiple terminals for different instances and run commands freely.
+ * SSH terminals:
+ *   "Open Terminal" on any instance/agent/job in the tree opens a real VS
+ *   Code integrated terminal running `ssh -p {port} root@{host}`.
  */
 
 import * as vscode from "vscode";
@@ -23,6 +27,31 @@ interface SshTarget {
 
 export class TerminalManager {
   private terminals = new Map<string, Terminal>();
+
+  /**
+   * Launch capix-code (the Capix CLI coding assistant) in a new terminal,
+   * pre-configured with the user's Capix endpoint + API key from
+   * SecretStorage. If no endpoint is configured, launches with the global
+   * gateway as the default.
+   */
+  async openCapixCode(capixBaseUrl: string, capixApiKey: string, capixModel?: string): Promise<void> {
+    const env: Record<string, string> = {
+      CAPIX_BASE_URL: capixBaseUrl,
+      CAPIX_API_KEY: capixApiKey,
+    };
+    if (capixModel) env.CAPIX_MODEL = capixModel;
+
+    const terminal = vscode.window.createTerminal({
+      name: "Capix Code",
+      env,
+      iconPath: new vscode.ThemeIcon("comment-discussion"),
+    });
+    terminal.show();
+    // Send the launch command after a brief delay (terminal needs to init).
+    setTimeout(() => {
+      terminal.sendText("capix-code");
+    }, 500);
+  }
 
   /** Open (or focus) an SSH terminal for a deployed instance. */
   openSshSession(target: SshTarget): void {
@@ -80,7 +109,7 @@ export class TerminalManager {
     terminal.show();
   }
 
-  /** Close all managed SSH terminals. */
+  /** Close all managed terminals. */
   disposeAll(): void {
     for (const [, terminal] of this.terminals) {
       terminal.dispose();
