@@ -28,7 +28,16 @@
     "serviceUrl": "https://open-vsx.org/vscode/gallery",
     "itemUrl": "https://open-vsx.org/vscode/item"
   },
-  "builtInExtensions": [],
+  "builtInExtensions": [
+    {
+      "name": "capix-llm",
+      "version": "1.0.0",
+      "repo": "",
+      "metadata": {
+        "isBuiltin": true
+      }
+    }
+  ],
   "linkProtectionTrustedDomains": [
     "https://capix.network",
     "https://www.capix.network",

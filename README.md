@@ -26,7 +26,17 @@ brew install --cask capixide
 CapixIDE is a full VS Code-compatible editor with:
 
 - **AI chat panel** — a built-in sidebar (inherited from Void's React UI) that talks to any OpenAI-compatible endpoint. Point it at your self-hosted Capix LLM deploy, or at any provider (Anthropic, OpenAI, DeepSeek, Ollama, vLLM, etc.).
-- **Capix LLM one-click deploys** — deploy a model to a GPU from inside the IDE and get an OpenAI endpoint back. See `/docs/llm-deploy.md`.
+- **Capix LLM extension (built-in)** — a sidebar panel that lets you deploy, manage, and destroy LLM endpoints without leaving the IDE:
+  - **Model Catalog tree** — browse SuperGemma partner endpoints + community models; click to deploy
+  - **Deploy custom models** — paste a Hugging Face link; we auto-detect the GPU specs
+  - **My Deploys tree** — live status of your running/stopped deploys with inline lifecycle controls
+  - **Destroy / Stop / Start** — full GPU instance lifecycle with confirmation dialogs
+  - **View logs** — fetch vLLM boot + server logs in an output panel (see why a deploy hasn't gone live)
+  - **Run command on GPU** — execute `nvidia-smi`, `docker ps`, `docker logs`, etc. on the instance for debugging
+  - **Copy endpoint / API key** — one click to copy the OpenAI base URL + Bearer key
+  - **Hosted endpoints** — grab an always-on Capix-hosted endpoint that's ready now (no deploy needed)
+  - **Region selection** — deploy to Europe, North America, Asia-Pacific, or Global
+- **Capix logo + branding** — the app icon, bundle id, and product name are all Capix-branded
 - **VS Code / Cursor / Windsurf settings import** — inherited from Void; copies your `settings.json`, `keybindings.json`, and extensions on first launch.
 - **JetBrains settings import** — our addition; translates IntelliJ / PyCharm / WebStorm keymaps and color schemes into VS Code format.
 - **Extension marketplace** — uses [Open VSX](https://open-vsx.org) (license-clean for forks), so thousands of VS Code extensions install normally.

@@ -37,6 +37,10 @@ esac
 
 echo "▸ Building CapixIDE for $PLATFORM-$ARCH…"
 
+# Compile the Capix LLM extension (TypeScript → JavaScript)
+echo "  → compiling capix-llm extension…"
+(cd "$VSCODE/extensions/capix-llm" && npm install --silent 2>/dev/null && npx tsc -p ./ 2>/dev/null || echo "  ! extension compile skipped (may need npm install)")
+
 echo "  → compiling React (chat panel UI)…"
 npm run buildreact
 

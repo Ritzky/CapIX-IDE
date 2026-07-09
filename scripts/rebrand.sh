@@ -105,4 +105,28 @@ mkdir -p "$VSCODE/src/vs/workbench/contrib/capix/browser/react/src/void-settings
 cp "$DIR/config/settings-defaults.json" "$VSCODE/src/vs/workbench/contrib/capix/browser/react/src/void-settings-tsx/capixDefaults.json" 2>/dev/null || true
 echo "  ✓ capix settings defaults"
 
-echo "✓ All patches + defaults applied."
+# 8. Copy the Capix LLM extension into the VS Code built-in extensions dir.
+#    This ships deploy/destroy/logs/exec controls + the model catalog tree
+#    in the Capix IDE sidebar — no separate install needed.
+if [ -d "$DIR/extensions/capix-llm" ]; then
+  mkdir -p "$VSCODE/extensions/capix-llm"
+  cp -R "$DIR/extensions/capix-llm/"* "$VSCODE/extensions/capix-llm/"
+  echo "  ✓ capix-llm extension copied to extensions/"
+fi
+
+# 9. Drop the Capix logo on top of the app icons.
+echo "▸ Applying Capix logo/icons…"
+if [ -d "$DIR/resources/icons" ]; then
+  for icon in "$DIR/resources/icons"/*; do
+    [ -e "$icon" ] || continue
+    name="$(basename "$icon")"
+    case "$name" in
+      *.icns) cp "$icon" "$VSCODE/resources/darwin/code.icns" 2>/dev/null || true ;;
+      *.ico)  cp "$icon" "$VSCODE/resources/win32/code.ico" 2>/dev/null || true ;;
+      *.png)  cp "$icon" "$VSCODE/resources/linux/code.png" 2>/dev/null || true ;;
+    esac
+  done
+  echo "  ✓ logo/icons applied"
+fi
+
+echo "✓ All patches + extensions + defaults applied."

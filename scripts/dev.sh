@@ -28,6 +28,10 @@ WATCH_PID=$!
 npm run watchreact &
 REACT_PID=$!
 
+# Compile the Capix LLM extension
+echo "▸ Compiling capix-llm extension…"
+(cd extensions/capix-llm && npm install --silent 2>/dev/null && npx tsc -p ./ 2>/dev/null || echo "  ! extension compile skipped") &
+
 cleanup() {
   kill "$WATCH_PID" "$REACT_PID" 2>/dev/null || true
 }
