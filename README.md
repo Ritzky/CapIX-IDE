@@ -1,6 +1,6 @@
 # Capix IDE
 
-The AI IDE for the Capix protocol — a fork of the [Void editor](https://github.com/voideditor/void) (itself a fork of VS Code), with built-in LLM deploys, cloud panels, a native SSH terminal, Covenant memory, and seamless profile sync between the web console and the IDE.
+The AI IDE for the Capix protocol — built-in LLM deploys, cloud panels, a native SSH terminal, Covenant memory, and seamless profile sync between the web console and the IDE.
 
 ## Download
 
@@ -12,8 +12,6 @@ Pre-built binaries for Mac, Windows, and Linux are on the [Releases page](https:
 | macOS (Intel) | `CapixIDE-x.x.x-x64.dmg` |
 | Windows | `CapixIDE-Setup-x.x.x.exe` |
 | Linux | `CapixIDE-x.x.x.AppImage` / `.deb` / `.rpm` |
-
-(NPM install coming soon: `npm i -g capix-ide`)
 
 ## What's in the box?
 
@@ -55,6 +53,17 @@ Capix IDE is a full VS Code-compatible editor with a Capix-branded sidebar exten
 - Deploy on the web → shows up in the IDE instantly. Deploy in the IDE → visible on the web.
 - Connect once with your `cpx_session.…` token — everything syncs.
 
+### Dev Tokens (proof-of-development)
+- Capix IDE automatically mints **DEV tokens** to your wallet when verifiable development happens:
+  - Commit code with Capix Code → 1 DEV
+  - Deploy an app/agent/LLM → 5 DEV
+  - Complete a productive session (50+ turns) → 10 DEV
+  - Record an architectural decision in Covenant → 2 DEV
+  - Ship a complete product → 50 DEV
+- Tokens are on-chain proof of useful work (Solana devnet pre-mainnet)
+- In the future, DEV tokens will be exchangeable for SOL or CPX
+- Visible in the Profile panel alongside your wallet balance
+
 ### Covenant (memory + governance + spirit)
 - **Spirit** — a system prompt with behavioral guidelines + hard governance rules (no destructive actions without approval, always explain changes, match existing style)
 - **Memory** — persistent store of decisions/patterns/feedback/context, injected into the system prompt before every chat call
@@ -65,15 +74,15 @@ Capix IDE is a full VS Code-compatible editor with a Capix-branded sidebar exten
 ### Capix Code (CLI assistant) Integration
 - "Capix: Launch Capix Code" command opens a terminal with `capix-code` pre-configured (env vars from SecretStorage)
 - Falls back to the Capix gateway if no deployed LLM is configured
-- `capix-code` is the Capix-branded fork of [opencode](https://github.com/anomalyco/opencode) — [github.com/Ritzky/capix-code](https://github.com/Ritzky/capix-code)
+- `capix-code` is the Capix CLI coding assistant — [github.com/Ritzky/capix-code](https://github.com/Ritzky/capix-code)
 
 ### Settings Import
-- **VS Code / Cursor / Windsurf** — inherited from Void; copies `settings.json`, `keybindings.json`, and extensions on first launch
-- **JetBrains** — our addition; translates IntelliJ / PyCharm / WebStorm keymaps and color schemes into VS Code format
+- **VS Code / Cursor / Windsurf** — copies `settings.json`, `keybindings.json`, and extensions on first launch
+- **JetBrains** — translates IntelliJ / PyCharm / WebStorm keymaps and color schemes into VS Code format
 
 ### Other
 - **Capix logo + branding** — the activity bar icon is the real Capix brand mark, the status bar shows connection state, the sidebar is titled "Capix"
-- **Extension marketplace** — uses [Open VSX](https://open-vsx.org) (license-clean for forks)
+- **Extension marketplace** — uses [Open VSX](https://open-vsx.org) (license-clean)
 - **Cross-platform** — `.dmg`, `.exe`, `.deb`, `.rpm`, AppImage via GitHub Actions
 - **Security** — session tokens + API keys in VS Code SecretStorage (OS keychain), webview CSP with per-render nonce, SSH command allowlist, host-key pinning
 
@@ -93,11 +102,11 @@ See [`docs/getting-started.md`](docs/getting-started.md) for the full walkthroug
 ```bash
 git clone https://github.com/Ritzky/CapIX-IDE.git
 cd CapixIDE
-./scripts/bootstrap.sh   # clones Void (VS Code fork) + applies the rebrand + installs the extension
-./scripts/dev.sh         # launches the dev Electron build
+./scripts/bootstrap.sh   # clones the source + applies the Capix branding + installs the extension
+./scripts/dev.sh         # launches the dev build
 ```
 
-This repo is the **rebrand kit + extension + builder pipeline**. The full VS Code source (~1GB) lives in `vscode/` after `bootstrap.sh` clones it.
+This repo is the **brand kit + extension + builder pipeline**. The full source lives in `vscode/` after `bootstrap.sh` clones it.
 
 To package distributable installers:
 
@@ -108,53 +117,14 @@ npx electron-builder --mac --arm64 --config electron-builder.yml
 
 For CI/cross-platform release builds, tag a version and the [Release workflow](.github/workflows/release.yml) builds all 6 platform/arch combos in parallel.
 
-### What the repo contains
-
-```
-CapixIDE/
-├── product.json                          # branding (nameShort, bundle id, icons, marketplace)
-├── electron-builder.yml                   # .dmg/.exe/.deb/.rpm/AppImage packaging
-├── extensions/capix-llm/                  # the built-in sidebar extension (all panels + commands)
-│   ├── src/extension.ts                  # entry point — registers all commands
-│   ├── src/apiClient.ts                  # HTTP client (SecretStorage-backed auth)
-│   ├── src/treeViews.ts                  # Deploys / Catalog / Hosted tree views
-│   ├── src/cloudPanels.ts                # Instances / Agents / Jobs / API Keys tree views
-│   ├── src/profileView.ts               # Profile webview (balance, billing, top-up)
-│   ├── src/terminalManager.ts           # SSH terminals + capix-code launcher
-│   ├── src/autoConnect.ts               # Auto-configure chat when LLM deploy goes live
-│   ├── src/covenant.ts                  # Memory + governance + spirit prompt
-│   ├── src/customLlmDiscovery.ts         # HF model card auto-detection (not yet — in protocol repo)
-│   └── package.json                      # extension manifest (8 views, 30+ commands)
-├── scripts/
-│   ├── bootstrap.sh                      # clone Void + rebrand + install extension
-│   ├── rebrand.sh                        # search-replace Void → Capix IDE
-│   ├── jetbrains-importer.mjs           # IntelliJ/PyCharm → VS Code settings translator
-│   ├── dev.sh                            # launch dev build
-│   └── build.sh                          # produce packaged app
-├── .github/workflows/release.yml         # 6-platform CI build
-├── resources/                            # icons, entitlements
-└── docs/                                 # getting-started, llm-deploy, contributing, guide
-```
-
-### How Capix IDE is built
-
-Capix IDE is a **derivative work** of Void (Apache-2.0) and VS Code (MIT):
-
-- **Void** is a VS Code fork that adds an AI chat panel, settings importer, and OpenAI-compatible LLM dispatch.
-- This repo contains the **rebrand kit** (`product.json`, `rebrand.sh`), the **built-in extension** (`extensions/capix-llm/`), the **JetBrains importer**, the **electron-builder config**, and the **release workflow**.
-- `scripts/bootstrap.sh` clones Void into `vscode/`, runs the rebrand (Void → Capix IDE), copies the extension into `vscode/extensions/capix-llm/`, and drops the Capix logo + branding.
-
 ## License
 
-- **Capix IDE extension + rebrand kit** (`extensions/`, `scripts/`, `electron-builder.yml`, docs): Apache-2.0, Copyright 2026 Capix.
-- **Void editor** (the chat panel, settings service, LLM dispatch): Apache-2.0, Copyright 2025 Glass Devtools, Inc.
-- **VS Code core**: MIT, Copyright Microsoft Corporation.
+- **Capix IDE extension + brand kit** (`extensions/`, `scripts/`, `electron-builder.yml`, docs): Apache-2.0, Copyright 2026 Capix.
+- **Editor core**: MIT, Copyright Microsoft Corporation.
 
-See `LICENSE`, `NOTICE`. "Void" and "Visual Studio Code" are NOT used by Capix IDE — rebranding is the license-compliant path.
+See `LICENSE`, `NOTICE`.
 
 ## Links
 
 - **Capix Protocol** — [capix.network](https://capix.network) · [github.com/Ritzky/Capix-Protocol](https://github.com/Ritzky/Capix-Protocol)
 - **Capix Code** (CLI assistant) — [github.com/Ritzky/capix-code](https://github.com/Ritzky/capix-code)
-- **Void editor** (upstream) — [github.com/voideditor/void](https://github.com/voideditor/void)
-- **VS Code** (base) — [github.com/microsoft/vscode](https://github.com/microsoft/vscode)

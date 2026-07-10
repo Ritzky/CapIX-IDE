@@ -32,7 +32,7 @@ jobs:
           body: |
             ## Capix IDE ${{ github.ref_name }}
 
-            The AI IDE for the Capix protocol — a VS Code fork with built-in LLM deploys, cloud panels, SSH terminal, Covenant memory, and seamless profile sync.
+            The AI IDE for the Capix protocol — built-in LLM deploys, cloud panels, SSH terminal, Covenant memory, Dev Token rewards, and seamless profile sync.
 
             ### Install
 

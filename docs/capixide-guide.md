@@ -102,7 +102,7 @@ Selecting one opens the deploy flow (model + GPU offer + duration), provisions t
 
 ## 6. Extension marketplace
 
-CapixIDE uses [Open VSX](https://open-vsx.org) (license-clean for forks), so the standard VS Code extension flow works:
+CapixIDE uses [Open VSX](https://open-vsx.org) (license-compatible), so the standard VS Code extension flow works:
 
 - `Cmd/Ctrl+Shift+X` opens Extensions.
 - Search and install. Python, ESLint, Prettier, GitLens, Docker, etc. all work.
@@ -113,7 +113,7 @@ CapixIDE uses [Open VSX](https://open-vsx.org) (license-clean for forks), so the
 ```bash
 git clone https://github.com/Ritzky/CapixIDE.git
 cd CapixIDE
-./scripts/bootstrap.sh   # clones Void (VS Code fork) + applies the rebrand
+./scripts/bootstrap.sh   # clones the source + applies the Capix branding + installs the extension
 ./scripts/dev.sh          # launches the dev Electron build
 ```
 

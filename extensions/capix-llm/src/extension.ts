@@ -17,6 +17,7 @@ import { ProfileViewProvider } from "./profileView";
 import { TerminalManager } from "./terminalManager";
 import { AutoConnectManager } from "./autoConnect";
 import { CovenantManager } from "./covenant";
+import { DevTokenManager } from "./devTokenManager";
 import type { CatalogModel } from "./types";
 
 let client: CapixClient;
@@ -31,6 +32,7 @@ let profileProvider: ProfileViewProvider;
 let terminalManager: TerminalManager;
 let autoConnect: AutoConnectManager;
 let covenant: CovenantManager;
+let devTokens: DevTokenManager;
 let refreshTimer: vscode.Disposable | null = null;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -53,6 +55,29 @@ export function activate(context: vscode.ExtensionContext) {
   terminalManager = new TerminalManager();
   autoConnect = new AutoConnectManager(client);
   covenant = new CovenantManager(context);
+  devTokens = new DevTokenManager(client);
+
+  // ── Dev Token: auto-mint on git commits ────────────────────────────────
+  // Watch the VS Code SCM (git) state — when HEAD changes, a commit happened.
+  let lastHead: string | undefined;
+  const gitWatcher = vscode.commands.registerCommand("capix.checkCommits", async () => {
+    try {
+      const gitExt = vscode.extensions.getExtension("vscode.git");
+      if (!gitExt?.isActive) return;
+      const gitApi = gitExt.exports.getAPI(1);
+      const repo = gitApi?.repositories?.[0];
+      if (!repo) return;
+      const head = repo.state.HEAD?.commit;
+      if (head && head !== lastHead && lastHead !== undefined) {
+        // A new commit was made — mint tokens.
+        await devTokens.onCommit(head, repo.state.HEAD?.name);
+      }
+      lastHead = head;
+    } catch { /* git extension not available */ }
+  });
+  context.subscriptions.push(gitWatcher);
+  // Poll git state every 10s (lightweight).
+  setInterval(() => vscode.commands.executeCommand("capix.checkCommits"), 10_000);
 
   const deploysView = vscode.window.createTreeView("capix.llm.deploys", { treeDataProvider: deploysProvider });
   const catalogView = vscode.window.createTreeView("capix.llm.catalog", { treeDataProvider: catalogProvider });
@@ -647,6 +672,7 @@ async function cmdDeployAgent() {
       if (res.ok) {
         vscode.window.showInformationMessage("✓ Agent deployed — check the Agents panel.");
         agentsProvider.load();
+        devTokens.onDeploy();
       } else {
         vscode.window.showErrorMessage(res.error || "Agent deploy failed.");
       }
@@ -668,6 +694,7 @@ async function cmdTriggerJob() {
   if (res.ok) {
     vscode.window.showInformationMessage("✓ Serverless job triggered — check the Jobs panel.");
     jobsProvider.load();
+    devTokens.onDeploy();
   } else {
     vscode.window.showErrorMessage(res.error || "Job trigger failed.");
   }
@@ -758,6 +785,7 @@ async function cmdCovenantRemember() {
 
   await covenant.remember({ type: typePick.value, content, source: "user" });
   vscode.window.showInformationMessage("✓ Remembered. This will be included in future chat context.");
+  devTokens.onDecision();
 }
 
 // Connect wallet / set session token — shared across web and IDE

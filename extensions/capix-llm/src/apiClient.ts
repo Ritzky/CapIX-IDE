@@ -258,4 +258,13 @@ export class CapixClient {
   async getPodCluster(): Promise<{ ok: boolean; cluster?: unknown; nodes?: unknown[] }> {
     return this.get("/api/cloud/pods?action=cluster");
   }
+
+  // ── Dev Tokens (proof-of-development minting) ───────────────────────────
+  async getDevTokenBalance(): Promise<{ ok: boolean; balance?: number; totalEarned?: number }> {
+    return this.get("/api/devtokens?wallet=me");
+  }
+
+  async mintDevTokens(reason: string, proof: { sessionId?: string; repoHash?: string; commitSha?: string; toolUsed: "capix-code" | "capix-ide" }): Promise<{ ok: boolean; mint?: unknown; message?: string; error?: string }> {
+    return this.post("/api/devtokens", { reason, proof });
+  }
 }

@@ -1,6 +1,6 @@
 # Contributing to CapixIDE
 
-CapixIDE is a rebrand kit + builder pipeline forking the Void editor (a VS Code fork). The full VS Code source (~1GB) is cloned into `vscode/` by `scripts/bootstrap.sh` — it is NOT checked into this repo.
+CapixIDE is a brand kit + builder pipeline built on the Void editor (a VS Code-based editor). The full VS Code source (~1GB) is cloned into `vscode/` by `scripts/bootstrap.sh` — it is NOT checked into this repo.
 
 ## Setup
 
